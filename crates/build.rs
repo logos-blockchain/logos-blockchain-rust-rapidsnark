@@ -50,22 +50,21 @@ fn main() {
         absolute_lib_path.display()
     );
 
-    let rapidsnark_link_mode = if is_static_rapidsnark() || is_mobile_target() {
-        "static"
+    // The shared rapidsnark artifact is already linked with its fr/fq/gmp implementation.
+    // Linking those helper libraries again is redundant and can accidentally pull static archives
+    // into downstream binaries, exporting generic Fr_* / Fq_* symbols that collide with other
+    // native ZK libraries.
+    //
+    // The static rapidsnark archive is different: it leaves Fr_*, Fq_*, and GMP symbols unresolved,
+    // so static/mobile builds must link the helper archives.
+    if is_static_rapidsnark() || is_mobile_target() {
+        println!("cargo:rustc-link-lib=static=rapidsnark");
+        println!("cargo:rustc-link-lib=static=fr");
+        println!("cargo:rustc-link-lib=static=fq");
+        println!("cargo:rustc-link-lib=static=gmp");
     } else {
-        "dylib"
-    };
-
-    let dependency_link_mode = if is_mobile_target() {
-        "static"
-    } else {
-        "dylib"
-    };
-
-    println!("cargo:rustc-link-lib={rapidsnark_link_mode}=rapidsnark");
-    println!("cargo:rustc-link-lib={dependency_link_mode}=fr");
-    println!("cargo:rustc-link-lib={dependency_link_mode}=fq");
-    println!("cargo:rustc-link-lib={dependency_link_mode}=gmp");
+        println!("cargo:rustc-link-lib=dylib=rapidsnark");
+    }
 
     println!("cargo:rustc-link-lib={cpp_stdlib}");
 
