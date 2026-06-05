@@ -49,9 +49,16 @@ let zkey_path = "./test-vectors/multiplier2_final.zkey";
 let proof = rust_rapidsnark::groth16_prover_zkey_file_wrapper(zkey_path, wtns_buffer).unwrap();
 ```
 
+You can also prove from an in-memory zkey buffer:
+
+```rust
+let zkey_buffer = std::fs::read("./test-vectors/multiplier2_final.zkey")?;
+let proof = rust_rapidsnark::groth16_prover_zkey_buffer_wrapper(&zkey_buffer, &wtns_buffer)?;
+```
+
 ### Verify the proof
 
-Verify the proof by using the `groth16_verifier_zkey_file_wrapper` function.
+Verify the proof by using the `groth16_verify_wrapper` function.
 
 ```rust
 let vkey = std::fs::read_to_string("./test-vectors/keccak256_256_test.vkey.json")?;

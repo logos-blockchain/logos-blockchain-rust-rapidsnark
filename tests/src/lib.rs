@@ -85,6 +85,42 @@ mod tests {
     }
 
     #[test]
+    fn test_prove_rapidsnark_zkey_buffer() -> Result<()> {
+        let zkey_path = "./test-vectors/multiplier2_final.zkey";
+        let zkey_buffer = std::fs::read(zkey_path)?;
+
+        let mut inputs = HashMap::new();
+        inputs.insert("a".to_string(), vec!["3".to_string()]);
+        inputs.insert("b".to_string(), vec!["11".to_string()]);
+
+        let wtns_buffer = compute_witness(inputs, multiplier2_witness)?;
+        let path_proof_result =
+            rust_rapidsnark::groth16_prover_zkey_file_wrapper(zkey_path, wtns_buffer.clone())?;
+        let buffer_proof_result =
+            rust_rapidsnark::groth16_prover_zkey_buffer_wrapper(&zkey_buffer, &wtns_buffer)?;
+
+        assert_eq!(
+            path_proof_result.public_signals,
+            buffer_proof_result.public_signals
+        );
+
+        let vkey = std::fs::read_to_string("./test-vectors/multiplier2.vkey.json")?;
+        let path_valid = rust_rapidsnark::groth16_verify_wrapper(
+            &path_proof_result.proof,
+            &path_proof_result.public_signals,
+            &vkey,
+        )?;
+        let buffer_valid = rust_rapidsnark::groth16_verify_wrapper(
+            &buffer_proof_result.proof,
+            &buffer_proof_result.public_signals,
+            &vkey,
+        )?;
+        assert!(path_valid);
+        assert!(buffer_valid);
+        Ok(())
+    }
+
+    #[test]
     fn test_prove_rapidsnark_keccak() -> Result<()> {
         // Create a new MoproCircom instance
         let zkey_path = "./test-vectors/keccak256_256_test_final.zkey";
