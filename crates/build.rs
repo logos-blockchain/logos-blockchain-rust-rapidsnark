@@ -45,14 +45,27 @@ fn main() {
         "stdc++"
     };
 
-    println!("cargo:rustc-link-search=native={}", absolute_lib_path.display());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        absolute_lib_path.display()
+    );
 
-    let should_link_static = is_static_rapidsnark() || is_mobile_target();
-    let link_mode = if should_link_static { "static" } else { "dylib" };
-    println!("cargo:rustc-link-lib={link_mode}=rapidsnark");
-    println!("cargo:rustc-link-lib={link_mode}=fr");
-    println!("cargo:rustc-link-lib={link_mode}=fq");
-    println!("cargo:rustc-link-lib={link_mode}=gmp");
+    let rapidsnark_link_mode = if is_static_rapidsnark() || is_mobile_target() {
+        "static"
+    } else {
+        "dylib"
+    };
+
+    let dependency_link_mode = if is_mobile_target() {
+        "static"
+    } else {
+        "dylib"
+    };
+
+    println!("cargo:rustc-link-lib={rapidsnark_link_mode}=rapidsnark");
+    println!("cargo:rustc-link-lib={dependency_link_mode}=fr");
+    println!("cargo:rustc-link-lib={dependency_link_mode}=fq");
+    println!("cargo:rustc-link-lib={dependency_link_mode}=gmp");
 
     println!("cargo:rustc-link-lib={cpp_stdlib}");
 
