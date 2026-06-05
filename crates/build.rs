@@ -45,29 +45,31 @@ fn main() {
         "stdc++"
     };
 
-    println!(
-        "cargo:rustc-link-search=native={}",
-        absolute_lib_path.clone().display()
-    );
+    println!("cargo:rustc-link-search=native={}", absolute_lib_path.display());
 
-    println!("cargo:rustc-link-lib=static=rapidsnark");
+    let should_link_static = is_static_rapidsnark() || is_mobile_target();
+    let link_mode = if should_link_static { "static" } else { "dylib" };
+    println!("cargo:rustc-link-lib={link_mode}=rapidsnark");
+    println!("cargo:rustc-link-lib={link_mode}=fr");
+    println!("cargo:rustc-link-lib={link_mode}=fq");
+    println!("cargo:rustc-link-lib={link_mode}=gmp");
+
     println!("cargo:rustc-link-lib={cpp_stdlib}");
-    if target.contains("android") {
-        // pthread is included in libc in android
-        println!("cargo:rustc-link-lib=c");
-    } else {
-        println!("cargo:rustc-link-lib=pthread");
-    }
-    println!("cargo:rustc-link-lib=static=fr");
-    println!("cargo:rustc-link-lib=static=fq");
-    println!("cargo:rustc-link-lib=static=gmp");
 
-    if !(env::var("CARGO_CFG_TARGET_OS").unwrap().contains("ios")
-        || env::var("CARGO_CFG_TARGET_OS").unwrap().contains("android"))
-    {
-        println!("cargo:rustc-link-lib=dylib=rapidsnark");
-        println!("cargo:rustc-link-lib=dylib=fr");
-        println!("cargo:rustc-link-lib=dylib=fq");
-        println!("cargo:rustc-link-lib=dylib=gmp");
-    }
+    // Android bundles pthread into libc
+    let thread_lib = if is_android_target() { "c" } else { "pthread" };
+    println!("cargo:rustc-link-lib={thread_lib}");
+}
+
+fn is_static_rapidsnark() -> bool {
+    env::var_os("CARGO_FEATURE_STATIC_RAPIDSNARK").is_some()
+}
+
+fn is_mobile_target() -> bool {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    target_os.contains("ios") || target_os.contains("android")
+}
+
+fn is_android_target() -> bool {
+    env::var("CARGO_CFG_TARGET_OS").unwrap().contains("android")
 }
