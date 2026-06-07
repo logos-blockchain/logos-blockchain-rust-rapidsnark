@@ -1,0 +1,108 @@
+name: Build PIC archives
+
+# Builds position-independent (-fPIC) static archives of rapidsnark + GMP for
+# glibc-Linux and publishes them as a GitHub release. The upstream iden3 Linux
+# archives are non-PIC and built against a newer glibc, so they cannot be linked
+# into a shared library (e.g. a downstream cdylib). crates/download_rapidsnark.sh
+# consumes the release produced here for the Linux targets.
+#
+# Trigger by pushing a tag like `rapidsnark-pic-v0.0.8`, or manually via the
+# "Run workflow" button (workflow_dispatch).
+
+on:
+  workflow_dispatch:
+    inputs:
+      rapidsnark_version:
+        description: "iden3 rapidsnark tag to build"
+        default: "v0.0.8"
+  push:
+    tags:
+      - "rapidsnark-pic-*"
+
+permissions:
+  contents: write
+
+env:
+  RAPIDSNARK_VERSION: ${{ github.event.inputs.rapidsnark_version || 'v0.0.8' }}
+  GMP_VERSION: "6.3.0"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            slug: rapidsnark-linux-x86_64-pic
+    # Build inside a glibc-2.35 image so the archives stay compatible with older
+    # glibc hosts (avoids the __isoc23_* / newer-GLIBCXX symbol requirements).
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential cmake nasm m4 xz-utils zip git curl ca-certificates libgmp-dev
+
+      - name: Build GMP (static, -fPIC)
+        run: |
+          curl -fsSL -o gmp.tar.xz "https://ftpmirror.gnu.org/gmp/gmp-${GMP_VERSION}.tar.xz"
+          tar xf gmp.tar.xz
+          cd "gmp-${GMP_VERSION}"
+          ./configure --enable-static --disable-shared --with-pic --prefix="$PWD/../gmp-install"
+          make -j"$(nproc)"
+          make install
+
+      - name: Build rapidsnark (static, -fPIC)
+        run: |
+          git clone --depth 1 --branch "$RAPIDSNARK_VERSION" https://github.com/iden3/rapidsnark.git rs
+          cd rs
+          git submodule update --init --depth 1 depends/ffiasm depends/json
+          mkdir bp && cd bp
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DUSE_ASM=ON \
+            -DUSE_OPENMP=OFF \
+            -DUSE_LOGGER=ON
+          make -j"$(nproc)" rapidsnarkStatic fr fq
+
+      - name: Package archives
+        run: |
+          NAME="${{ matrix.slug }}-${RAPIDSNARK_VERSION}"
+          mkdir -p "pkg/$NAME/lib"
+          cp rs/bp/src/librapidsnark.a rs/bp/src/libfr.a rs/bp/src/libfq.a \
+             gmp-install/lib/libgmp.a "pkg/$NAME/lib/"
+          (cd pkg && zip -r "../$NAME.zip" "$NAME")
+          echo "--- contents ---"
+          unzip -l "$NAME.zip"
+          echo "isoc23 refs (expect 0): $(nm "pkg/$NAME/lib/librapidsnark.a" | grep -c isoc23 || true)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.slug }}
+          path: ${{ matrix.slug }}-*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish / update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="rapidsnark-pic-${RAPIDSNARK_VERSION}"
+          ls -la dist/
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "rapidsnark ${RAPIDSNARK_VERSION} (-fPIC Linux archives)" \
+            --notes "Position-independent static archives of rapidsnark ${RAPIDSNARK_VERSION} and GMP ${GMP_VERSION}, built on glibc 2.35 for Linux. Consumed by crates/download_rapidsnark.sh for the Linux targets." \
+            || echo "Release $TAG already exists; updating assets."
+          gh release upload "$TAG" dist/*.zip --repo "$GITHUB_REPOSITORY" --clobber
