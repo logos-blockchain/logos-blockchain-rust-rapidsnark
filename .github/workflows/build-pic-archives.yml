@@ -33,10 +33,15 @@ jobs:
       matrix:
         include:
           - arch: x86_64
+            runner: ubuntu-latest
             slug: rapidsnark-linux-x86_64-pic
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            slug: rapidsnark-linux-arm64-pic
+    runs-on: ${{ matrix.runner }}
     # Build inside a glibc-2.35 image so the archives stay compatible with older
     # glibc hosts (avoids the __isoc23_* / newer-GLIBCXX symbol requirements).
-    runs-on: ubuntu-latest
+    # The ubuntu:22.04 image resolves to the runner's architecture automatically.
     container: ubuntu:22.04
     steps:
       - name: Install build dependencies
