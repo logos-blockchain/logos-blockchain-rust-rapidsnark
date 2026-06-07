@@ -35,9 +35,13 @@ jobs:
           - arch: x86_64
             runner: ubuntu-latest
             slug: rapidsnark-linux-x86_64-pic
+            # Empty => cmake defaults to the x86_64 field-arithmetic asm (nasm).
+            target_platform: ""
           - arch: arm64
             runner: ubuntu-22.04-arm
             slug: rapidsnark-linux-arm64-pic
+            # aarch64 => cmake uses the AArch64 .s field arithmetic, not x86 nasm.
+            target_platform: "aarch64"
     runs-on: ${{ matrix.runner }}
     # Build inside a glibc-2.35 image so the archives stay compatible with older
     # glibc hosts (avoids the __isoc23_* / newer-GLIBCXX symbol requirements).
@@ -64,13 +68,28 @@ jobs:
           cd rs
           git submodule update --init --depth 1 depends/ffiasm depends/json
           mkdir bp && cd bp
+          PLATFORM_ARG=""
+          if [ -n "${{ matrix.target_platform }}" ]; then
+            PLATFORM_ARG="-DTARGET_PLATFORM=${{ matrix.target_platform }}"
+          fi
           cmake .. \
+            $PLATFORM_ARG \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
             -DUSE_ASM=ON \
             -DUSE_OPENMP=OFF \
             -DUSE_LOGGER=ON
           make -j"$(nproc)" rapidsnarkStatic fr fq
+
+      - name: Verify archive architecture
+        run: |
+          fmt=$(objdump -f rs/bp/src/libfr.a | grep -m1 'file format')
+          echo "libfr.a -> $fmt"
+          case "${{ matrix.arch }}" in
+            x86_64) echo "$fmt" | grep -q 'elf64-x86-64'      || { echo "::error::expected x86-64 objects"; exit 1; } ;;
+            arm64)  echo "$fmt" | grep -q 'elf64-littleaarch64' || { echo "::error::expected aarch64 objects"; exit 1; } ;;
+          esac
+          echo "architecture OK for ${{ matrix.arch }}"
 
       - name: Package archives
         run: |
