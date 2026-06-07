@@ -71,6 +71,29 @@ fn main() {
     // Android bundles pthread into libc
     let thread_lib = if is_android_target() { "c" } else { "pthread" };
     println!("cargo:rustc-link-lib={thread_lib}");
+
+    // glibc >= 2.38 redirects strtoll/strtoull to the C23 interceptor symbols
+    // __isoc23_strtoll / __isoc23_strtoull. The prebuilt iden3 rapidsnark archives
+    // were compiled against such a glibc, so when they are linked statically on a
+    // host with an older glibc (e.g. glibc 2.35) the verifier objects reference
+    // __isoc23_* symbols that do not exist there and linking fails. Compile thin
+    // forwarders to the classic strtoll/strtoull and link them so the static path
+    // resolves regardless of the host glibc version. Only relevant for the static
+    // archive on glibc-Linux; the shared library and other targets are unaffected.
+    println!("cargo:rerun-if-changed=isoc23_compat.c");
+    if is_static_rapidsnark()
+        && env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux")
+        && env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("gnu")
+    {
+        cc::Build::new()
+            .file("isoc23_compat.c")
+            .cargo_metadata(false)
+            .compile("isoc23_compat");
+        println!("cargo:rustc-link-search=native={out_dir}");
+        // whole-archive so the forwarders are included unconditionally, regardless
+        // of this archive's position relative to librapidsnark.a on the link line.
+        println!("cargo:rustc-link-lib=static:+whole-archive=isoc23_compat");
+    }
 }
 
 fn is_static_rapidsnark() -> bool {
