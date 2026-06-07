@@ -37,9 +37,9 @@ jobs:
             slug: rapidsnark-linux-x86_64-pic
             # Empty => cmake defaults to the x86_64 field-arithmetic asm (nasm).
             target_platform: ""
-          - arch: arm64
+          - arch: aarch64
             runner: ubuntu-22.04-arm
-            slug: rapidsnark-linux-arm64-pic
+            slug: rapidsnark-linux-aarch64-pic
             # aarch64 => cmake uses the AArch64 .s field arithmetic, not x86 nasm.
             target_platform: "aarch64"
     runs-on: ${{ matrix.runner }}
@@ -86,8 +86,8 @@ jobs:
           fmt=$(objdump -f rs/bp/src/libfr.a | grep -m1 'file format')
           echo "libfr.a -> $fmt"
           case "${{ matrix.arch }}" in
-            x86_64) echo "$fmt" | grep -q 'elf64-x86-64'      || { echo "::error::expected x86-64 objects"; exit 1; } ;;
-            arm64)  echo "$fmt" | grep -q 'elf64-littleaarch64' || { echo "::error::expected aarch64 objects"; exit 1; } ;;
+            x86_64)  echo "$fmt" | grep -q 'elf64-x86-64'        || { echo "::error::expected x86-64 objects"; exit 1; } ;;
+            aarch64) echo "$fmt" | grep -q 'elf64-littleaarch64' || { echo "::error::expected aarch64 objects"; exit 1; } ;;
           esac
           echo "architecture OK for ${{ matrix.arch }}"
 

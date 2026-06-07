@@ -31,7 +31,7 @@ arch=$(echo "$TARGET" | cut -d'-' -f1)
 # Map the rust target triple to the release asset slug and its hosting base URL.
 case "$TARGET" in
     x86_64-*-linux-*)                       asset="rapidsnark-linux-x86_64-pic-$VERSION"; base_url="$FORK_BASE" ;;
-    aarch64-*-linux-gnu*)                   asset="rapidsnark-linux-arm64-pic-$VERSION";  base_url="$FORK_BASE" ;;
+    aarch64-*-linux-gnu*)                   asset="rapidsnark-linux-aarch64-pic-$VERSION"; base_url="$FORK_BASE" ;;
     aarch64-linux-android)                  asset="rapidsnark-android-arm64-$VERSION";    base_url="$IDEN3_BASE" ;;
     x86_64-linux-android)                   asset="rapidsnark-android-x86_64-$VERSION";   base_url="$IDEN3_BASE" ;;
     aarch64-apple-darwin)                   asset="rapidsnark-macOS-arm64-$VERSION";      base_url="$IDEN3_BASE" ;;
