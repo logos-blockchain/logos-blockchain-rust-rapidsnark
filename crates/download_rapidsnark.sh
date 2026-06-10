@@ -14,8 +14,12 @@ if [ -z "$TARGET" ]; then
     exit 1
 fi
 
-# Pinned rapidsnark release. Bump this to update the prebuilt artifacts.
-VERSION="v0.0.8"
+# Passed by build.rs from RAPIDSNARK_VERSION at the repo root. See CONTRIBUTING.md for bump instructions.
+if [ -z "$RAPIDSNARK_VERSION" ]; then
+    echo "RAPIDSNARK_VERSION not specified"
+    exit 1
+fi
+VERSION="v${RAPIDSNARK_VERSION}"
 # Upstream iden3 prebuilt archives (used for macOS / iOS / Android).
 IDEN3_BASE="https://github.com/iden3/rapidsnark/releases/download/$VERSION"
 # The iden3 Linux archives are non-PIC and built against a newer glibc, so they
