@@ -1,5 +1,5 @@
 {
-  description = "Pre-built rapidsnark libraries (Nix)";
+  description = "Rapidsnark Environment";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
 
