@@ -13,8 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       rapidsnark_version:
-        description: "iden3 rapidsnark tag to build"
-        default: "v0.0.8"
+        description: "iden3 rapidsnark tag to build (e.g. v0.0.8) — see RAPIDSNARK_VERSION at repo root"
   push:
     tags:
       - "rapidsnark-pic-*"
@@ -23,7 +22,6 @@ permissions:
   contents: write
 
 env:
-  RAPIDSNARK_VERSION: ${{ github.event.inputs.rapidsnark_version || 'v0.0.8' }}
   GMP_VERSION: "6.3.0"
 
 jobs:
@@ -48,6 +46,23 @@ jobs:
     # The ubuntu:22.04 image resolves to the runner's architecture automatically.
     container: ubuntu:22.04
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve rapidsnark version
+        run: |
+          if [ -n "${{ github.event.inputs.rapidsnark_version }}" ]; then
+            RESOLVED="${{ github.event.inputs.rapidsnark_version }}"
+          else
+            RESOLVED="${GITHUB_REF_NAME#rapidsnark-pic-}"
+          fi
+          PINNED="v$(cat RAPIDSNARK_VERSION)"
+          if [ "$RESOLVED" != "$PINNED" ]; then
+            echo "::error::version mismatch: trigger says $RESOLVED but RAPIDSNARK_VERSION says $PINNED"
+            exit 1
+          fi
+          echo "RAPIDSNARK_VERSION=$RESOLVED" >> $GITHUB_ENV
+
       - name: Install build dependencies
         run: |
           apt-get update
