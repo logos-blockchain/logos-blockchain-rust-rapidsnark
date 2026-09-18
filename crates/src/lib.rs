@@ -332,7 +332,7 @@ pub fn groth16_verify_wrapper(proof: &str, inputs: &str, verification_key: &str)
             inputs_cstr.as_ptr() as *const std::ffi::c_char,
             verification_key_cstr.as_ptr() as *const std::ffi::c_char,
             error_msg_ptr,
-            error_msg.len() as u64,
+            error_msg.len() as std::ffi::c_ulong,
         );
         if result == 2 {
             let error_string = std::ffi::CStr::from_ptr(error_msg_ptr)

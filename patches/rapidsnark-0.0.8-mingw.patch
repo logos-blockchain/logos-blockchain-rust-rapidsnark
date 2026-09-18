@@ -1,0 +1,149 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1575bd1..6add554 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -31,6 +31,11 @@ endif()
+ 
+ include_directories(BEFORE ${GMP_INCLUDE_DIR})
+ 
++# MinGW lacks `uint` / `u_intN_t`, which this tree and ffiasm use widely.
++if(WIN32)
++    add_compile_options(-include ${CMAKE_CURRENT_SOURCE_DIR}/src/mingw_compat.h)
++endif()
++
+ 
+ if(USE_OPENMP)
+     find_package(OpenMP)
+diff --git a/src/binfile_utils.cpp b/src/binfile_utils.cpp
+index 53cc5d9..5f34dc3 100644
+--- a/src/binfile_utils.cpp
++++ b/src/binfile_utils.cpp
+@@ -1,7 +1,8 @@
+-#include <sys/mman.h>
+ #include <sys/stat.h>
+ #include <fcntl.h>
++#ifndef _WIN32
+ #include <unistd.h>
++#endif
+ #include <system_error>
+ #include <string>
+ #include <memory.h>
+diff --git a/src/fileloader.cpp b/src/fileloader.cpp
+index 4a64928..10e5376 100644
+--- a/src/fileloader.cpp
++++ b/src/fileloader.cpp
+@@ -1,7 +1,11 @@
++#ifdef _WIN32
++#include <windows.h>
++#else
+ #include <sys/mman.h>
++#include <unistd.h>
++#endif
+ #include <sys/stat.h>
+ #include <fcntl.h>
+-#include <unistd.h>
+ #include <system_error>
+ #include <stdexcept>
+ 
+@@ -20,6 +24,58 @@ FileLoader::FileLoader(const std::string& fileName)
+     load(fileName);
+ }
+ 
++#ifdef _WIN32
++
++// Windows has no mmap; a read-only file mapping is the direct equivalent.
++// `fd` stays the loaded/not-loaded sentinel so the header is unchanged.
++static HANDLE g_file    = INVALID_HANDLE_VALUE;
++static HANDLE g_mapping = nullptr;
++
++void FileLoader::load(const std::string& fileName)
++{
++    if (fd != -1) {
++        throw std::invalid_argument("file already loaded");
++    }
++
++    g_file = CreateFileA(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
++                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
++    if (g_file == INVALID_HANDLE_VALUE)
++        throw std::system_error(GetLastError(), std::system_category(), "CreateFile");
++
++    LARGE_INTEGER fileSize;
++    if (!GetFileSizeEx(g_file, &fileSize)) {
++        CloseHandle(g_file);
++        throw std::system_error(GetLastError(), std::system_category(), "GetFileSizeEx");
++    }
++    size = static_cast<size_t>(fileSize.QuadPart);
++
++    g_mapping = CreateFileMappingA(g_file, nullptr, PAGE_READONLY, 0, 0, nullptr);
++    if (g_mapping == nullptr) {
++        CloseHandle(g_file);
++        throw std::system_error(GetLastError(), std::system_category(), "CreateFileMapping");
++    }
++
++    addr = MapViewOfFile(g_mapping, FILE_MAP_READ, 0, 0, 0);
++    if (addr == nullptr) {
++        CloseHandle(g_mapping);
++        CloseHandle(g_file);
++        throw std::system_error(GetLastError(), std::system_category(), "MapViewOfFile");
++    }
++
++    fd = 0;
++}
++
++FileLoader::~FileLoader()
++{
++    if (fd != -1) {
++        UnmapViewOfFile(addr);
++        CloseHandle(g_mapping);
++        CloseHandle(g_file);
++    }
++}
++
++#else
++
+ void FileLoader::load(const std::string& fileName)
+ {
+     if (fd != -1) {
+@@ -58,4 +114,6 @@ FileLoader::~FileLoader()
+     }
+ }
+ 
++#endif
++
+ } // Namespace
+diff --git a/src/logger.hpp b/src/logger.hpp
+index f7a2762..f51a7e6 100644
+--- a/src/logger.hpp
++++ b/src/logger.hpp
+@@ -36,7 +36,7 @@
+ 
+ #ifdef WIN32
+ // Win Socket Header File(s)
+-#include <Windows.h>
++#include <windows.h>
+ #include <process.h>
+ #else
+ // POSIX Socket Header File(s)
+diff --git a/src/mingw_compat.h b/src/mingw_compat.h
+new file mode 100644
+index 0000000..dae417a
+--- /dev/null
++++ b/src/mingw_compat.h
+@@ -0,0 +1,17 @@
++// MinGW provides neither the GNU `uint` nor the BSD `u_intN_t` typedefs that
++// rapidsnark and ffiasm use throughout. CMake force-includes this on WIN32.
++// <stdint.h> rather than <cstdint>: it is included into C sources too.
++#ifndef RAPIDSNARK_MINGW_COMPAT_H
++#define RAPIDSNARK_MINGW_COMPAT_H
++
++#ifdef __MINGW32__
++#include <stdint.h>
++#include <sys/types.h>
++typedef unsigned int uint;
++typedef uint8_t  u_int8_t;
++typedef uint16_t u_int16_t;
++typedef uint32_t u_int32_t;
++typedef uint64_t u_int64_t;
++#endif
++
++#endif

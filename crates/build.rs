@@ -47,7 +47,7 @@ fn main() {
     //
     // The static rapidsnark archive is different: it leaves Fr_*, Fq_*, and GMP symbols unresolved,
     // so static/mobile builds must link the helper archives.
-    if is_static_rapidsnark() || is_mobile_target() {
+    if is_static_rapidsnark() || is_mobile_target() || is_windows_target() {
         println!("cargo:rustc-link-lib=static=rapidsnark");
         println!("cargo:rustc-link-lib=static=fr");
         println!("cargo:rustc-link-lib=static=fq");
@@ -58,8 +58,14 @@ fn main() {
 
     println!("cargo:rustc-link-lib={cpp_stdlib}");
 
-    // Android bundles pthread into libc
-    let thread_lib = if is_android_target() { "c" } else { "pthread" };
+    // Android bundles pthread into libc; mingw names it winpthread.
+    let thread_lib = if is_android_target() {
+        "c"
+    } else if is_windows_target() {
+        "winpthread"
+    } else {
+        "pthread"
+    };
     println!("cargo:rustc-link-lib={thread_lib}");
 }
 
@@ -116,6 +122,10 @@ fn is_static_rapidsnark() -> bool {
 fn is_mobile_target() -> bool {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     target_os.contains("ios") || target_os.contains("android")
+}
+
+fn is_windows_target() -> bool {
+    env::var("CARGO_CFG_TARGET_OS").unwrap().contains("windows")
 }
 
 fn is_android_target() -> bool {

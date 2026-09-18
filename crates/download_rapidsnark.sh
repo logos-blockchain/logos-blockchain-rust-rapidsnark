@@ -38,6 +38,10 @@ case "$TARGET" in
     aarch64-*-linux-gnu*)                   asset="rapidsnark-linux-aarch64-pic-$VERSION"; base_url="$FORK_BASE" ;;
     aarch64-linux-android)                  asset="rapidsnark-android-arm64-$VERSION";    base_url="$IDEN3_BASE" ;;
     x86_64-linux-android)                   asset="rapidsnark-android-x86_64-$VERSION";   base_url="$IDEN3_BASE" ;;
+    # MinGW archives are built by us too: upstream publishes none, and the
+    # x86_64 field-arithmetic asm is System V, so the Windows build is
+    # USE_ASM=OFF (see .github/workflows/build-pic-archives.yml).
+    x86_64-pc-windows-gnu)                  asset="rapidsnark-windows-x86_64-$VERSION";   base_url="$FORK_BASE" ;;
     aarch64-apple-darwin)                   asset="rapidsnark-macOS-arm64-$VERSION";      base_url="$IDEN3_BASE" ;;
     x86_64-apple-darwin)                    asset="rapidsnark-macOS-x86_64-$VERSION";      base_url="$IDEN3_BASE" ;;
     aarch64-apple-ios-sim|x86_64-apple-ios) asset="rapidsnark-iOS-Simulator-$VERSION";    base_url="$IDEN3_BASE" ;;

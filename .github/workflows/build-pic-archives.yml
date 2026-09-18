@@ -40,6 +40,16 @@ jobs:
             slug: rapidsnark-linux-aarch64-pic
             # aarch64 => cmake uses the AArch64 .s field arithmetic, not x86 nasm.
             target_platform: "aarch64"
+          - arch: windows-x86_64
+            runner: ubuntu-latest
+            slug: rapidsnark-windows-x86_64
+            target_platform: ""
+            # MinGW cross build. USE_ASM is OFF here: build/fr.asm and fq.asm
+            # use the System V argument registers, and Windows x86-64 uses the
+            # Microsoft calling convention, so the generated asm is wrong there
+            # rather than merely unassemblable. The generic C++ field
+            # arithmetic is correct; it is slower.
+            mingw: "true"
     runs-on: ${{ matrix.runner }}
     # Build inside a glibc-2.35 image so the archives stay compatible with older
     # glibc hosts (avoids the __isoc23_* / newer-GLIBCXX symbol requirements).
@@ -67,13 +77,30 @@ jobs:
         run: |
           apt-get update
           apt-get install -y build-essential cmake nasm m4 xz-utils zip git curl ca-certificates libgmp-dev
+          if [ "${{ matrix.mingw }}" = "true" ]; then
+            apt-get install -y g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64
+            # Debian/Ubuntu default the mingw toolchain to the win32 threads
+            # model, which ships no std::thread or std::mutex. prover.cpp uses
+            # both, so select the posix variant.
+            update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+            update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          fi
 
       - name: Build GMP (static, -fPIC)
         run: |
           curl -fsSL -o gmp.tar.xz "https://ftpmirror.gnu.org/gmp/gmp-${GMP_VERSION}.tar.xz"
           tar xf gmp.tar.xz
           cd "gmp-${GMP_VERSION}"
-          ./configure --enable-static --disable-shared --with-pic --prefix="$PWD/../gmp-install"
+          if [ "${{ matrix.mingw }}" = "true" ]; then
+            # Without an explicit CC, autoconf falls back to the host gcc and
+            # then reports "could not find a working compiler".
+            export CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
+                   AR=x86_64-w64-mingw32-ar RANLIB=x86_64-w64-mingw32-ranlib
+            ./configure --host=x86_64-w64-mingw32 --enable-static --disable-shared \
+                        --with-pic --prefix="$PWD/../gmp-install"
+          else
+            ./configure --enable-static --disable-shared --with-pic --prefix="$PWD/../gmp-install"
+          fi
           make -j"$(nproc)"
           make install
 
@@ -82,18 +109,28 @@ jobs:
           git clone --depth 1 --branch "$RAPIDSNARK_VERSION" https://github.com/iden3/rapidsnark.git rs
           cd rs
           git submodule update --init --depth 1 depends/ffiasm depends/json
+          if [ "${{ matrix.mingw }}" = "true" ]; then
+            # Upstream has no MinGW port; see patches/ for what each hunk is for.
+            git apply --verbose "$GITHUB_WORKSPACE/patches/rapidsnark-${RAPIDSNARK_VERSION#v}-mingw.patch"
+          fi
           mkdir bp && cd bp
-          PLATFORM_ARG=""
+          CMAKE_ARGS=()
           if [ -n "${{ matrix.target_platform }}" ]; then
-            PLATFORM_ARG="-DTARGET_PLATFORM=${{ matrix.target_platform }}"
+            CMAKE_ARGS+=("-DTARGET_PLATFORM=${{ matrix.target_platform }}")
+          fi
+          USE_ASM=ON
+          if [ "${{ matrix.mingw }}" = "true" ]; then
+            CMAKE_ARGS+=("-DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/cmake/mingw-w64-x86_64.cmake")
+            USE_ASM=OFF
           fi
           cmake .. \
-            $PLATFORM_ARG \
+            "${CMAKE_ARGS[@]}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-            -DUSE_ASM=ON \
+            -DUSE_ASM=$USE_ASM \
             -DUSE_OPENMP=OFF \
-            -DUSE_LOGGER=ON
+            -DUSE_LOGGER=ON \
+            -DBUILD_TESTS=OFF
           make -j"$(nproc)" rapidsnarkStatic fr fq
 
       - name: Verify archive architecture
@@ -101,8 +138,9 @@ jobs:
           fmt=$(objdump -f rs/bp/src/libfr.a | grep -m1 'file format')
           echo "libfr.a -> $fmt"
           case "${{ matrix.arch }}" in
-            x86_64)  echo "$fmt" | grep -q 'elf64-x86-64'        || { echo "::error::expected x86-64 objects"; exit 1; } ;;
-            aarch64) echo "$fmt" | grep -q 'elf64-littleaarch64' || { echo "::error::expected aarch64 objects"; exit 1; } ;;
+            x86_64)         echo "$fmt" | grep -q 'elf64-x86-64'        || { echo "::error::expected x86-64 objects"; exit 1; } ;;
+            aarch64)        echo "$fmt" | grep -q 'elf64-littleaarch64' || { echo "::error::expected aarch64 objects"; exit 1; } ;;
+            windows-x86_64) echo "$fmt" | grep -q 'pe-x86-64'           || { echo "::error::expected PE x86-64 objects"; exit 1; } ;;
           esac
           echo "architecture OK for ${{ matrix.arch }}"
 
