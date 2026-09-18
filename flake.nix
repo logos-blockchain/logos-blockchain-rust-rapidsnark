@@ -2,9 +2,13 @@
   description = "Rapidsnark Environment";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+  # The MinGW the windows-x86_64 archives are built with. Archives built with one
+  # mingw-w64 do not link with another, and consumers link with logos-nix's
+  # toolchain, so the archives are built with the same one; relock together.
+  inputs.logos-nix.url = "github:logos-co/logos-nix";
 
   outputs =
-    { nixpkgs, ... }:
+    { nixpkgs, logos-nix, ... }:
     let
       lib = nixpkgs.lib;
 
@@ -55,6 +59,22 @@
         };
     in
     {
+      # `nix develop .#windows-cross` puts the pinned MinGW on PATH for
+      # scripts/build-windows-archives.sh. CI runs the same command.
+      devShells.x86_64-linux.windows-cross =
+        let
+          pkgs = logos-nix.inputs.nixpkgs.legacyPackages.x86_64-linux;
+          mingw = pkgs.pkgsCross.mingwW64;
+          gmp = mingw.gmp.override { withStatic = true; };
+        in
+        pkgs.mkShell {
+          packages = [ mingw.stdenv.cc pkgs.cmake pkgs.gnumake pkgs.git pkgs.zip ];
+          CROSS_GMP_LIB = "${gmp}/lib";
+          CROSS_GMP_INCLUDE = "${gmp.dev}/include";
+          CROSS_EXTRA_INCLUDES = "-I${mingw.windows.mcfgthreads.dev}/include -I${mingw.windows.pthreads}/include";
+          TOOLCHAIN_ID = "x86_64-w64-mingw32-gcc ${mingw.stdenv.cc.cc.version}; logos-nix ${logos-nix.rev or "dirty"}";
+        };
+
       packages = forAll (system: {
         rapidsnark = mkRapidsnark system;
         default    = mkRapidsnark system;
