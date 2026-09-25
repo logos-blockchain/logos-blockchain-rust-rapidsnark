@@ -1,0 +1,254 @@
+name: Build PIC archives
+
+# Builds position-independent (-fPIC) static archives of rapidsnark + GMP for
+# glibc-Linux and publishes them as a GitHub release. The upstream iden3 Linux
+# archives are non-PIC and built against a newer glibc, so they cannot be linked
+# into a shared library (e.g. a downstream cdylib). crates/download_rapidsnark.sh
+# consumes the release produced here for the Linux targets.
+#
+# Trigger by pushing a tag like `rapidsnark-pic-v0.0.8`, or manually via the
+# "Run workflow" button (workflow_dispatch).
+
+on:
+  workflow_dispatch:
+    inputs:
+      rapidsnark_version:
+        description: "iden3 rapidsnark tag to build (e.g. v0.0.8) — see RAPIDSNARK_VERSION at repo root"
+  push:
+    tags:
+      - "rapidsnark-pic-*"
+
+permissions:
+  contents: write
+
+env:
+  GMP_VERSION: "6.3.0"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            slug: rapidsnark-linux-x86_64-pic
+            # Empty => cmake defaults to the x86_64 field-arithmetic asm (nasm).
+            target_platform: ""
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+            slug: rapidsnark-linux-aarch64-pic
+            # aarch64 => cmake uses the AArch64 .s field arithmetic, not x86 nasm.
+            target_platform: "aarch64"
+    runs-on: ${{ matrix.runner }}
+    # Build inside a glibc-2.35 image so the archives stay compatible with older
+    # glibc hosts (avoids the __isoc23_* / newer-GLIBCXX symbol requirements).
+    # The ubuntu:22.04 image resolves to the runner's architecture automatically.
+    container: ubuntu:22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve rapidsnark version
+        run: |
+          if [ -n "${{ github.event.inputs.rapidsnark_version }}" ]; then
+            RESOLVED="${{ github.event.inputs.rapidsnark_version }}"
+          else
+            RESOLVED="${GITHUB_REF_NAME#rapidsnark-pic-}"
+          fi
+          PINNED="v$(cat RAPIDSNARK_VERSION)"
+          if [ "$RESOLVED" != "$PINNED" ]; then
+            echo "::error::version mismatch: trigger says $RESOLVED but RAPIDSNARK_VERSION says $PINNED"
+            exit 1
+          fi
+          echo "RAPIDSNARK_VERSION=$RESOLVED" >> $GITHUB_ENV
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential cmake nasm m4 xz-utils zip git curl ca-certificates libgmp-dev
+
+      - name: Build GMP (static, -fPIC)
+        run: |
+          curl -fsSL -o gmp.tar.xz "https://ftpmirror.gnu.org/gmp/gmp-${GMP_VERSION}.tar.xz"
+          tar xf gmp.tar.xz
+          cd "gmp-${GMP_VERSION}"
+          ./configure --enable-static --disable-shared --with-pic --prefix="$PWD/../gmp-install"
+          make -j"$(nproc)"
+          make install
+
+      - name: Build rapidsnark (static, -fPIC)
+        run: |
+          git clone --depth 1 --branch "$RAPIDSNARK_VERSION" https://github.com/iden3/rapidsnark.git rs
+          cd rs
+          git submodule update --init --depth 1 depends/ffiasm depends/json
+          mkdir bp && cd bp
+          PLATFORM_ARG=""
+          if [ -n "${{ matrix.target_platform }}" ]; then
+            PLATFORM_ARG="-DTARGET_PLATFORM=${{ matrix.target_platform }}"
+          fi
+          cmake .. \
+            $PLATFORM_ARG \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DUSE_ASM=ON \
+            -DUSE_OPENMP=OFF \
+            -DUSE_LOGGER=ON
+          make -j"$(nproc)" rapidsnarkStatic fr fq
+
+      - name: Verify archive architecture
+        run: |
+          fmt=$(objdump -f rs/bp/src/libfr.a | grep -m1 'file format')
+          echo "libfr.a -> $fmt"
+          case "${{ matrix.arch }}" in
+            x86_64)  echo "$fmt" | grep -q 'elf64-x86-64'        || { echo "::error::expected x86-64 objects"; exit 1; } ;;
+            aarch64) echo "$fmt" | grep -q 'elf64-littleaarch64' || { echo "::error::expected aarch64 objects"; exit 1; } ;;
+          esac
+          echo "architecture OK for ${{ matrix.arch }}"
+
+      - name: Package archives
+        run: |
+          NAME="${{ matrix.slug }}-${RAPIDSNARK_VERSION}"
+          mkdir -p "pkg/$NAME/lib"
+          cp rs/bp/src/librapidsnark.a rs/bp/src/libfr.a rs/bp/src/libfq.a \
+             gmp-install/lib/libgmp.a "pkg/$NAME/lib/"
+          (cd pkg && zip -r "../$NAME.zip" "$NAME")
+          echo "--- contents ---"
+          unzip -l "$NAME.zip"
+          echo "isoc23 refs (expect 0): $(nm "pkg/$NAME/lib/librapidsnark.a" | grep -c isoc23 || true)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.slug }}
+          path: ${{ matrix.slug }}-*.zip
+          if-no-files-found: error
+
+  # MinGW-w64 build of the rapidsnark static archives for x86_64-pc-windows-gnu.
+  # Uses the Windows build recipe maintained in logos-blockchain-circuits
+  # (.github/resources/prover-windows/), which patches iden3's sources for MSYS2:
+  # no field-arithmetic asm (nasm output is ELF-only), an mmap shim from
+  # mman-win32, and stubbed madvise/uio headers.
+  build-windows:
+    runs-on: windows-latest
+    env:
+      SLUG: rapidsnark-windows-x86_64-pic
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2.28.0
+        with:
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            cmake
+            make
+            git
+
+      - name: Resolve rapidsnark version
+        shell: msys2 {0}
+        run: |
+          if [ -n "${{ github.event.inputs.rapidsnark_version }}" ]; then
+            RESOLVED="${{ github.event.inputs.rapidsnark_version }}"
+          else
+            RESOLVED="${GITHUB_REF_NAME#rapidsnark-pic-}"
+          fi
+          PINNED="v$(cat RAPIDSNARK_VERSION)"
+          if [ "$RESOLVED" != "$PINNED" ]; then
+            echo "::error::version mismatch: trigger says $RESOLVED but RAPIDSNARK_VERSION says $PINNED"
+            exit 1
+          fi
+          echo "RAPIDSNARK_VERSION=$RESOLVED" >> $GITHUB_ENV
+
+      - name: Install mman-win32
+        shell: msys2 {0}
+        run: |
+          git clone https://github.com/alitrack/mman-win32.git
+          pushd mman-win32
+          ./configure --prefix=
+          make
+          make install
+          popd
+
+      - name: Install nlohmann/json header
+        shell: msys2 {0}
+        run: |
+          mkdir -p /include/nlohmann/
+          curl -fsSL -o /include/nlohmann/json.hpp https://github.com/nlohmann/json/releases/download/v3.12.0/json.hpp
+
+      - name: Fetch rapidsnark sources
+        shell: msys2 {0}
+        run: |
+          git clone --depth 1 --branch "$RAPIDSNARK_VERSION" https://github.com/iden3/rapidsnark.git rs
+          cd rs
+          git submodule update --init --depth 1 depends/ffiasm depends/json
+
+      - name: Apply Windows build patches
+        shell: msys2 {0}
+        run: |
+          mkdir -p /include/sys
+          cp .github/resources/prover-windows/Makefile rs/Makefile
+          cp .github/resources/prover-windows/windows.src-CMakeLists.txt rs/src/CMakeLists.txt
+          cp .github/resources/prover-windows/windows.mman_patch.hpp /include/mman_patch.hpp
+          cp .github/resources/prover-windows/windows.uio.h /include/sys/uio.h
+          cp .github/resources/prover-windows/windows.build_gmp.sh rs/build_gmp.sh
+          # Seed the GMP tarball the script expects to find in depends/.
+          curl -fsSL -o rs/depends/gmp-6.2.1.tar.xz https://ftpmirror.gnu.org/gmp/gmp-6.2.1.tar.xz
+
+      - name: Build GMP + rapidsnark (MinGW static)
+        shell: msys2 {0}
+        working-directory: rs
+        run: |
+          ./build_gmp.sh host
+          make host_windows_x86_64_static
+
+      - name: Package archives
+        shell: msys2 {0}
+        run: |
+          NAME="${SLUG}-${RAPIDSNARK_VERSION}"
+          mkdir -p "pkg/$NAME/lib"
+          cp rs/build_prover/src/librapidsnark.a rs/build_prover/src/libfr.a \
+             rs/build_prover/src/libfq.a rs/depends/gmp/package/lib/libgmp.a \
+             /lib/libmman.a "pkg/$NAME/lib/"
+          ls -la "pkg/$NAME/lib/"
+          (cd pkg && /c/Windows/System32/tar.exe -a -cf "../$NAME.zip" "$NAME")
+          echo "--- contents ---"
+          /c/Windows/System32/tar.exe -tf "$NAME.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SLUG }}
+          path: ${{ env.SLUG }}-*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [build, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout first — it runs `git clean`, which would wipe a previously
+      # downloaded dist/ that is not tracked.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish / update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RAPIDSNARK_VERSION="$(cat RAPIDSNARK_VERSION)"
+          TAG="rapidsnark-pic-${RAPIDSNARK_VERSION}"
+          ls -la dist/
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "rapidsnark ${RAPIDSNARK_VERSION} (static archives)" \
+            --notes "Position-independent static archives of rapidsnark ${RAPIDSNARK_VERSION} and GMP ${GMP_VERSION} for glibc Linux (built on glibc 2.35), plus a MinGW-w64 Windows build. Consumed by crates/download_rapidsnark.sh." \
+            || echo "Release $TAG already exists; updating assets."
+          gh release upload "$TAG" dist/*.zip --repo "$GITHUB_REPOSITORY" --clobber

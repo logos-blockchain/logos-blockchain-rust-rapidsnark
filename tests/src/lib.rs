@@ -85,6 +85,42 @@ mod tests {
     }
 
     #[test]
+    fn test_prove_rapidsnark_zkey_buffer() -> Result<()> {
+        let zkey_path = "./test-vectors/multiplier2_final.zkey";
+        let zkey_buffer = std::fs::read(zkey_path)?;
+
+        let mut inputs = HashMap::new();
+        inputs.insert("a".to_string(), vec!["3".to_string()]);
+        inputs.insert("b".to_string(), vec!["11".to_string()]);
+
+        let wtns_buffer = compute_witness(inputs, multiplier2_witness)?;
+        let path_proof_result =
+            rust_rapidsnark::groth16_prover_zkey_file_wrapper(zkey_path, wtns_buffer.clone())?;
+        let buffer_proof_result =
+            rust_rapidsnark::groth16_prover_zkey_buffer_wrapper(&zkey_buffer, &wtns_buffer)?;
+
+        assert_eq!(
+            path_proof_result.public_signals,
+            buffer_proof_result.public_signals
+        );
+
+        let vkey = std::fs::read_to_string("./test-vectors/multiplier2.vkey.json")?;
+        let path_valid = rust_rapidsnark::groth16_verify_wrapper(
+            &path_proof_result.proof,
+            &path_proof_result.public_signals,
+            &vkey,
+        )?;
+        let buffer_valid = rust_rapidsnark::groth16_verify_wrapper(
+            &buffer_proof_result.proof,
+            &buffer_proof_result.public_signals,
+            &vkey,
+        )?;
+        assert!(path_valid);
+        assert!(buffer_valid);
+        Ok(())
+    }
+
+    #[test]
     fn test_prove_rapidsnark_keccak() -> Result<()> {
         // Create a new MoproCircom instance
         let zkey_path = "./test-vectors/keccak256_256_test_final.zkey";
@@ -112,6 +148,53 @@ mod tests {
             &vkey,
         )?;
         assert!(valid);
+        Ok(())
+    }
+
+    /// Regression guard for the rapidsnark concurrent-proving deadlock.
+    ///
+    /// rapidsnark before v0.0.8 shared a single global C++ thread pool with no
+    /// pool-level lock, so concurrent provers could strand each other on a
+    /// worker and hang. The hang was non-deterministic (more likely the more
+    /// proofs ran at once); v0.0.8 serializes the pool and fixes it.
+    ///
+    /// This runs several proofs at once with a timeout watchdog, so a
+    /// reintroduced deadlock fails the test instead of hanging CI forever. It is
+    /// a best-effort, timing-based check: a failure here almost certainly means
+    /// the deadlock is back (e.g. an ffiasm downgrade), not random flakiness.
+    #[test]
+    fn concurrent_proving_does_not_deadlock() -> Result<()> {
+        use std::{sync::mpsc, time::Duration};
+
+        const CONCURRENCY: usize = 8;
+        const TIMEOUT: Duration = Duration::from_secs(60);
+
+        let zkey_path = "./test-vectors/multiplier2_final.zkey";
+
+        let mut inputs = HashMap::new();
+        inputs.insert("a".to_string(), vec!["3".to_string()]);
+        inputs.insert("b".to_string(), vec!["11".to_string()]);
+        let wtns_buffer = compute_witness(inputs, multiplier2_witness)?;
+
+        let (tx, rx) = mpsc::channel();
+        for _ in 0..CONCURRENCY {
+            let wtns = wtns_buffer.clone();
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                rust_rapidsnark::groth16_prover_zkey_file_wrapper(zkey_path, wtns).unwrap();
+                let _ = tx.send(());
+            });
+        }
+        drop(tx);
+
+        for completed in 0..CONCURRENCY {
+            rx.recv_timeout(TIMEOUT).unwrap_or_else(|_| {
+                panic!(
+                    "concurrent proving deadlocked: only {completed}/{CONCURRENCY} \
+                     proofs finished within {TIMEOUT:?}"
+                )
+            });
+        }
         Ok(())
     }
 }
