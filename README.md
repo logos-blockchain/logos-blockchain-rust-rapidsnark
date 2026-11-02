@@ -7,6 +7,7 @@
 > -   **Dynamic or static linking.** By default, only the shared rapidsnark library is linked.
 >     It contains its own `Fr_*`, `Fq_*` and GMP symbols, so they can't collide with other native ZK libraries.
 >     The `static-rapidsnark` feature links the static libraries instead. iOS and Android are always static.
+> -   **Buffer prover.** `groth16_prover_zkey_buffer_wrapper` takes the zkey from memory, not from a file.
 >
 > This fork is not published to crates.io. Depend on it as a git dependency pinned by tag:
 >
