@@ -31,6 +31,8 @@ jobs:
             - name: Check formatting
               run: cargo fmt --all -- --check
     build-ios:
+        # Disabled: Logos doesn't ship mobile.
+        if: false
         runs-on: macos-latest
         strategy:
             matrix:
@@ -45,6 +47,8 @@ jobs:
             - name: Build
               run: cargo build --target ${{ matrix.target }}
     build-android:
+        # Disabled: Logos doesn't ship mobile.
+        if: false
         runs-on: ubuntu-latest
         strategy:
             matrix:
