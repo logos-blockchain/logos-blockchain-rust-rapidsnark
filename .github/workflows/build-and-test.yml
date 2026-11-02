@@ -96,27 +96,49 @@ jobs:
               run: cargo test
             - name: Run tests (static rapidsnark)
               run: cargo test --features rust-rapidsnark/static-rapidsnark
+    # Built on Linux with logos-nix's MinGW, the toolchain the rapidsnark fork's Windows libraries are built with.
+    build-windows:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+            - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+            - name: Install Rust target
+              run: rustup target add x86_64-pc-windows-gnu
+            - name: Build tests
+              run: |
+                  nix develop .#windows-cross -c cargo test --no-run --target x86_64-pc-windows-gnu \
+                      --features rust-rapidsnark/static-rapidsnark --message-format=json > build.json
+            # The test binaries run on Windows, so copy them out for upload, by crate,
+            # because each one must run from its crate's directory to find its test vectors.
+            - name: Stage test binaries
+              run: |
+                  jq -r 'select(.profile.test) | "\(.manifest_path) \(.executable)"' build.json |
+                      while read -r manifest exe; do
+                          dir=dist/$(basename "$(dirname "$manifest")")
+                          mkdir -p "$dir" && cp "$exe" "$dir/"
+                      done
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: windows-tests
+                  path: dist
+                  if-no-files-found: error
     test-windows:
+        needs: build-windows
         runs-on: windows-latest
         defaults:
             run:
                 shell: bash
         steps:
             - uses: actions/checkout@v5
-            - name: Install MinGW
-              uses: msys2/setup-msys2@v2
+            - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
               with:
-                  msystem: UCRT64
-                  install: >-
-                      mingw-w64-ucrt-x86_64-gcc
-                      mingw-w64-ucrt-x86_64-ninja
-            # Before the runner's own MinGW, which uses the older C runtime.
-            - name: Add MinGW to PATH
-              run: echo '${{ runner.temp }}\msys64\ucrt64\bin' >> "$GITHUB_PATH"
-            - name: Install Rust target
-              run: rustup target add x86_64-pc-windows-gnu
+                  name: windows-tests
+                  path: dist
             - name: Run tests
-              # rust-witness expects w2c2 at build/w2c2/w2c2, which Visual Studio, cmake's default on Windows, doesn't use.
-              env:
-                  CMAKE_GENERATOR: Ninja
-              run: cargo test --target x86_64-pc-windows-gnu --features rust-rapidsnark/static-rapidsnark
+              run: |
+                  for dir in dist/*/; do
+                      crate=$(basename "$dir")
+                      for exe in "$dir"*.exe; do
+                          (cd "$crate" && "../$exe")
+                      done
+                  done
