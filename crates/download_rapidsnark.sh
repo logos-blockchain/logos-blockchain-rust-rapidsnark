@@ -27,9 +27,10 @@ ARCH=$(echo "$TARGET" | cut -d'-' -f1)
 # Apple assets are universal archives, which rustc rejects when bundling a static
 # library ("Unsupported archive identifier"), so thin them to LIPO_ARCH.
 #
-# build.rs asks for both static and dylib, which rustc resolves to one
-# -lrapidsnark after -lstdc++. GNU ld cannot satisfy that from the archive, so
-# Linux also needs SHARED_LIB. https://github.com/zkmopro/rust-rapidsnark/pull/11
+# What build.rs links:
+# - Mobile: the static libraries.
+# - Desktop with static-rapidsnark: the static libraries.
+# - Desktop without static-rapidsnark: the shared library, so SHARED_LIB is set.
 LIPO_ARCH=
 SHARED_LIB=
 case "$TARGET" in
@@ -49,10 +50,12 @@ case "$TARGET" in
     aarch64-apple-darwin)
         SLUG=macOS-arm64
         LIPO_ARCH=arm64
+        SHARED_LIB=librapidsnark.dylib
         ;;
     x86_64-apple-darwin)
         SLUG=macOS-x86_64
         LIPO_ARCH=x86_64
+        SHARED_LIB=librapidsnark.dylib
         ;;
     aarch64-linux-android) SLUG=android-arm64 ;;
     x86_64-linux-android) SLUG=android-x86_64 ;;
