@@ -96,3 +96,27 @@ jobs:
               run: cargo test
             - name: Run tests (static rapidsnark)
               run: cargo test --features rust-rapidsnark/static-rapidsnark
+    test-windows:
+        runs-on: windows-latest
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@v5
+            - name: Install MinGW
+              uses: msys2/setup-msys2@v2
+              with:
+                  msystem: UCRT64
+                  install: >-
+                      mingw-w64-ucrt-x86_64-gcc
+                      mingw-w64-ucrt-x86_64-ninja
+            # Before the runner's own MinGW, which uses the older C runtime.
+            - name: Add MinGW to PATH
+              run: echo '${{ runner.temp }}\msys64\ucrt64\bin' >> "$GITHUB_PATH"
+            - name: Install Rust target
+              run: rustup target add x86_64-pc-windows-gnu
+            - name: Run tests
+              # rust-witness expects w2c2 at build/w2c2/w2c2, which Visual Studio, cmake's default on Windows, doesn't use.
+              env:
+                  CMAKE_GENERATOR: Ninja
+              run: cargo test --target x86_64-pc-windows-gnu --features rust-rapidsnark/static-rapidsnark

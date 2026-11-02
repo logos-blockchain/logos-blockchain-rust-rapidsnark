@@ -15,6 +15,11 @@ fn main() {
     let target = env::var("TARGET").unwrap();
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set");
 
+    // There is no shared rapidsnark library for Windows.
+    if is_windows_target() && !is_static_rapidsnark() {
+        panic!("Windows needs the static-rapidsnark feature.");
+    }
+
     // See: https://github.com/zkmopro/chkstk_stub
     chkstk_stub::build();
 
@@ -48,6 +53,14 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=rapidsnark");
     }
 
+    if is_windows_target() {
+        // librapidsnark.a needs mcfgthread, which most MinGW toolchains lack, so link the bundled one.
+        println!("cargo:rustc-link-lib=static=mcfgthread");
+        // Link the C++ runtime statically, so binaries don't need libstdc++-6.dll.
+        println!("cargo:rustc-link-lib=static:-bundle={cpp_stdlib}");
+        return;
+    }
+
     println!("cargo:rustc-link-lib={cpp_stdlib}");
 
     // Android bundles pthread into libc
@@ -61,6 +74,10 @@ fn main() {
 
 fn is_static_rapidsnark() -> bool {
     env::var_os("CARGO_FEATURE_STATIC_RAPIDSNARK").is_some()
+}
+
+fn is_windows_target() -> bool {
+    env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
 }
 
 fn is_mobile_target() -> bool {

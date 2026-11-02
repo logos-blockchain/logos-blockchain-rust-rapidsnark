@@ -11,5 +11,4 @@ rust-rapidsnark = { path = "../crates" }
 rust-witness = "0.1.6"
 
 [build-dependencies]
-rust-rapidsnark = { path = "../crates" }
 rust-witness = "0.1.6"

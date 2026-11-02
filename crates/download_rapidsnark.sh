@@ -8,6 +8,10 @@ if [ -z "$OUT_DIR" ]; then
     echo "OUT_DIR not specified"
     exit 1
 fi
+# Use Unix-style paths on Windows to avoid path issues.
+if command -v cygpath > /dev/null 2>&1; then
+    OUT_DIR=$(cygpath -u "$OUT_DIR")
+fi
 # TARGET is specified by the rust build environment
 if [ -z "$TARGET" ]; then
     echo "TARGET not specified"
@@ -41,6 +45,7 @@ ARCH=$(echo "$TARGET" | cut -d'-' -f1)
 # - Mobile: the static libraries, from iden3.
 # - Desktop with static-rapidsnark: the static libraries, from the Logos fork.
 # - Desktop without static-rapidsnark: the shared library, from iden3, so SHARED_LIB is set.
+# - Windows: the static libraries, from the Logos fork. iden3 doesn't publish Windows builds.
 LIPO_ARCH=
 SHARED_LIB=
 # Who publishes the static libraries: iden3, or the Logos fork.
@@ -70,6 +75,17 @@ case "$TARGET" in
         LIPO_ARCH=x86_64
         SHARED_LIB=librapidsnark.dylib
         STATIC_SOURCE=logos
+        ;;
+    x86_64-pc-windows-gnu)
+        SLUG=windows-x86_64
+        STATIC_SOURCE=logos
+        # librapidsnark.a is built with mcfgthread, which most MinGW toolchains don't have.
+        REQUIRED_LIBS="$REQUIRED_LIBS libmcfgthread.a"
+        ;;
+    *-windows-*)
+        echo "No rapidsnark prebuilt covers target $TARGET. On Windows, only x86_64-pc-windows-gnu is supported."
+        echo "Set RAPIDSNARK_LIB_DIR to a directory containing $REQUIRED_LIBS to build against your own."
+        exit 1
         ;;
     aarch64-linux-android) SLUG=android-arm64 ;;
     x86_64-linux-android) SLUG=android-x86_64 ;;
@@ -134,6 +150,7 @@ if [ "$SOURCE" = logos ]; then
         linux-x86_64) SHA256=1f8bb340b9062f22c79d21dfdf03261b2463c4fd132ab947364b63993d7a67e9 ;;
         macOS-arm64) SHA256=1528adb72e6c4861d38e4731c8a27cee69cbf33343ac98a485ed3b755248444a ;;
         macOS-x86_64) SHA256=c541391eb80e42939ca9e4df19dab6237727027515d999876586e646929db877 ;;
+        windows-x86_64) SHA256=1162259fd1c18f1dd2783bc5dd1e72187e13b8ad863e917168db16280e765a45 ;;
     esac
 fi
 

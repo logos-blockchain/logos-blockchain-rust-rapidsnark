@@ -9,6 +9,7 @@
 >     The `static-rapidsnark` feature links the static libraries instead. iOS and Android are always static.
 > -   **Static libraries from the [Logos rapidsnark fork](https://github.com/logos-blockchain/logos-blockchain-rapidsnark).**
 >     With `static-rapidsnark`, Linux and macOS use the fork's PIC libraries.
+> -   **Windows support.** `x86_64-pc-windows-gnu`, with `static-rapidsnark`.
 > -   **Buffer prover.** `groth16_prover_zkey_buffer_wrapper` takes the zkey from memory, not from a file.
 > -   **Pinned Rust toolchain.** [`rust-toolchain.toml`](./rust-toolchain.toml) sets the Rust version to match the
 >     Logos Blockchain node, not the one upstream uses.
