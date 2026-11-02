@@ -25,8 +25,8 @@
         CC_x86_64_pc_windows_gnu = "${cc.targetPrefix}gcc";
         CXX_x86_64_pc_windows_gnu = "${cc.targetPrefix}g++";
         AR_x86_64_pc_windows_gnu = "${cc.targetPrefix}ar";
-        # Rust's windows-gnu std links libpthread.a, which logos-nix's MinGW doesn't have.
-        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${windowsPkgs.windows.pthreads}/lib";
+        # Rust expects pthreads, but logos-nix's MinGW uses mcfgthread.
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${windowsPkgs.windows.pthreads}/lib -C link-arg=-lmcfgthread";
       };
     };
 }
