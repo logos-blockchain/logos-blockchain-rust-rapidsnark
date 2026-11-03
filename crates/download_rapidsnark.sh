@@ -21,7 +21,7 @@ fi
 RAPIDSNARK_VERSION=v0.0.8
 # The Logos rapidsnark fork's release of the iden3 version above, used for static desktop builds.
 # When upstream changes RAPIDSNARK_VERSION, release the fork for that version first, then update this.
-LOGOS_RAPIDSNARK_SUFFIX=logos.1-rc.3
+LOGOS_RAPIDSNARK_SUFFIX=logos.1-rc.4
 LOGOS_RAPIDSNARK_VERSION=$RAPIDSNARK_VERSION-$LOGOS_RAPIDSNARK_SUFFIX
 if ! echo "$LOGOS_RAPIDSNARK_VERSION" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+-logos\.[0-9]+(-rc\.[0-9]+)?'; then
     echo "Malformed LOGOS_RAPIDSNARK_VERSION: $LOGOS_RAPIDSNARK_VERSION"
@@ -144,11 +144,11 @@ esac
 # The Logos fork's archives.
 if [ "$SOURCE" = logos ]; then
     case "$SLUG" in
-        linux-arm64) SHA256=acd2148f2e4490ee3df76232e1cd9170afb62db5fa1f217cea976ecb6c63b117 ;;
-        linux-x86_64) SHA256=1f8bb340b9062f22c79d21dfdf03261b2463c4fd132ab947364b63993d7a67e9 ;;
-        macOS-arm64) SHA256=1528adb72e6c4861d38e4731c8a27cee69cbf33343ac98a485ed3b755248444a ;;
-        macOS-x86_64) SHA256=c541391eb80e42939ca9e4df19dab6237727027515d999876586e646929db877 ;;
-        windows-x86_64) SHA256=1162259fd1c18f1dd2783bc5dd1e72187e13b8ad863e917168db16280e765a45 ;;
+        linux-arm64) SHA256=f093b0ca6121b8c8af56b39e78045be6526b8990bdb4e73bc3ca0b758909940d ;;
+        linux-x86_64) SHA256=6193ff030f0810478c0b165a07a1e1d5857fc3ec7d6f98f0f97d6280047c0e91 ;;
+        macOS-arm64) SHA256=0c6e8cef95e55c1c952a82bb412650c3cad6a696b5e3a4f5041a486887d41108 ;;
+        macOS-x86_64) SHA256=4ad188b832773f2a24656c6b284789747e723548ae8525db1f7f20e976077374 ;;
+        windows-x86_64) SHA256=9cc8a0b3c7e5394f1c4204f69cccbc58806346e4d7c5cda176963fbc0718c776 ;;
     esac
 fi
 
