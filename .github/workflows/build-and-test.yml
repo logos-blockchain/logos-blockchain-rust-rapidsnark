@@ -2,6 +2,8 @@ name: Build and Test
 
 on:
     push:
+        branches:
+            - "logos/**"
     pull_request:
         types:
             - opened
@@ -15,7 +17,6 @@ env:
 jobs:
     clippy_check:
         runs-on: ubuntu-latest
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         env:
             RUSTFLAGS: "-Dwarnings" # Make sure CI fails on all warnings, including Clippy lints
         steps:
@@ -24,7 +25,6 @@ jobs:
               run: cargo clippy --all-targets --all-features
     lint:
         runs-on: ubuntu-latest
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         steps:
             - uses: actions/checkout@v5
 
@@ -32,7 +32,6 @@ jobs:
               run: cargo fmt --all -- --check
     build-ios:
         runs-on: macos-latest
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         strategy:
             matrix:
                 target:
@@ -41,16 +40,12 @@ jobs:
         steps:
             - name: Checkout Repository
               uses: actions/checkout@v5
-            - name: Install Rust
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  toolchain: "1.89.0"
-                  targets: ${{ matrix.target }}
+            - name: Install Rust target
+              run: rustup target add ${{ matrix.target }}
             - name: Build
               run: cargo build --target ${{ matrix.target }}
     build-android:
         runs-on: ubuntu-latest
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         strategy:
             matrix:
                 target:
@@ -59,67 +54,40 @@ jobs:
         steps:
             - name: Checkout Repository
               uses: actions/checkout@v5
-            - name: Install Rust
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  toolchain: "1.89.0"
-                  targets: ${{ matrix.target }}
+            - name: Install Rust target
+              run: rustup target add ${{ matrix.target }}
             - name: Install Android NDK
               run: cargo install cargo-ndk
             - name: Build
               run: cargo ndk -t ${{ matrix.target }} build
     test-linux:
         runs-on: ubuntu-latest
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         steps:
             - uses: actions/checkout@v5
-            - name: Install Rust toolchain
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: "1.89.0"
-                  override: true
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)
               run: cargo test --features rust-rapidsnark/static-rapidsnark
     test-linux-arm64:
         runs-on: ubuntu-24.04-arm
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         steps:
             - uses: actions/checkout@v5
-            - name: Install Rust toolchain
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: "1.89.0"
-                  override: true
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)
               run: cargo test --features rust-rapidsnark/static-rapidsnark
     test-macOS:
         runs-on: macos-latest
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         steps:
             - uses: actions/checkout@v5
-            - name: Install Rust toolchain
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: "1.89.0"
-                  override: true
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)
               run: cargo test --features rust-rapidsnark/static-rapidsnark
     test-macOS-x86_64:
         runs-on: macos-15-intel
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
         steps:
             - uses: actions/checkout@v5
-            - name: Install Rust toolchain
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: "1.89.0"
-                  override: true
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)

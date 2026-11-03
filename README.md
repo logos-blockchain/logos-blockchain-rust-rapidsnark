@@ -10,6 +10,8 @@
 > -   **Static libraries from the [Logos rapidsnark fork](https://github.com/logos-blockchain/logos-blockchain-rapidsnark).**
 >     With `static-rapidsnark`, Linux and macOS use the fork's PIC libraries.
 > -   **Buffer prover.** `groth16_prover_zkey_buffer_wrapper` takes the zkey from memory, not from a file.
+> -   **Pinned Rust toolchain.** [`rust-toolchain.toml`](./rust-toolchain.toml) sets the Rust version to match the
+>     Logos Blockchain node, not the one upstream uses.
 >
 > This fork is not published to crates.io. Depend on it as a git dependency pinned by tag:
 >
