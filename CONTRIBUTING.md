@@ -43,6 +43,24 @@ PRs are squash-merged, so each one is a single commit that is easy to rebase ont
 3. Make `logos/v0.1.5` the default branch. `logos/v0.1.4` stays as it is.
 4. Release it, then update the downstream pins, e.g. the Logos Blockchain node's `Cargo.toml`.
 
+## Rapidsnark
+
+Static desktop builds link the libraries from the [Logos rapidsnark fork](https://github.com/logos-blockchain/logos-blockchain-rapidsnark)'s releases,
+which add the platforms and build options that iden3's releases lack.
+For details, see its `README.md` and `CONTRIBUTING.md` on the `logos/<RAPIDSNARK_VERSION>` branch.
+
+`crates/download_rapidsnark.sh` pins the version in two lines:
+
+```sh
+RAPIDSNARK_VERSION=v0.0.8             # The iden3 version.
+LOGOS_RAPIDSNARK_SUFFIX=logos.1-rc.3  # The Logos fork's release of it.
+```
+
+Together they are the fork's tag, `v0.0.8-logos.1-rc.3`.
+
+To update, set `LOGOS_RAPIDSNARK_SUFFIX` and the `logos-*` hashes in the script.
+If an upstream sync changes `RAPIDSNARK_VERSION`, the fork needs a release for that version first.
+
 ## Releasing
 
 Tags are `v<x.y.z>-logos.<n>` on `logos/v<x.y.z>`, e.g. `v0.1.4-logos.1` on `logos/v0.1.4`.

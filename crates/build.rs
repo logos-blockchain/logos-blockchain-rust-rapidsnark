@@ -76,6 +76,10 @@ fn download_prebuilt(out_dir: &str, target: &str) -> PathBuf {
 
     let status = Command::new("sh")
         .arg(&script_path)
+        .env(
+            "RAPIDSNARK_STATIC",
+            if is_static_rapidsnark() { "1" } else { "0" },
+        )
         .status()
         .unwrap_or_else(|e| panic!("Failed to run the rapidsnark download script: {e}"));
 

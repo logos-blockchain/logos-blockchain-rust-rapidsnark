@@ -15,7 +15,17 @@ if [ -z "$TARGET" ]; then
 fi
 
 RAPIDSNARK_VERSION=v0.0.8
-BASE_URL=${RAPIDSNARK_DOWNLOAD_BASE_URL:-https://github.com/iden3/rapidsnark/releases/download/$RAPIDSNARK_VERSION}
+# The Logos rapidsnark fork's release of the iden3 version above, used for static desktop builds.
+# When upstream changes RAPIDSNARK_VERSION, release the fork for that version first, then update this.
+LOGOS_RAPIDSNARK_SUFFIX=logos.1-rc.3
+LOGOS_RAPIDSNARK_VERSION=$RAPIDSNARK_VERSION-$LOGOS_RAPIDSNARK_SUFFIX
+if ! echo "$LOGOS_RAPIDSNARK_VERSION" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+-logos\.[0-9]+(-rc\.[0-9]+)?'; then
+    echo "Malformed LOGOS_RAPIDSNARK_VERSION: $LOGOS_RAPIDSNARK_VERSION"
+    exit 1
+fi
+
+IDEN3_BASE_URL=https://github.com/iden3/rapidsnark/releases/download/$RAPIDSNARK_VERSION
+LOGOS_BASE_URL=https://github.com/logos-blockchain/logos-blockchain-rapidsnark/releases/download/$LOGOS_RAPIDSNARK_VERSION
 
 BUILD_DIR=$OUT_DIR/rapidsnark
 LIB_DIR=$BUILD_DIR/$TARGET
@@ -27,12 +37,14 @@ ARCH=$(echo "$TARGET" | cut -d'-' -f1)
 # Apple assets are universal archives, which rustc rejects when bundling a static
 # library ("Unsupported archive identifier"), so thin them to LIPO_ARCH.
 #
-# What build.rs links:
-# - Mobile: the static libraries.
-# - Desktop with static-rapidsnark: the static libraries.
-# - Desktop without static-rapidsnark: the shared library, so SHARED_LIB is set.
+# What build.rs links, and where it comes from:
+# - Mobile: the static libraries, from iden3.
+# - Desktop with static-rapidsnark: the static libraries, from the Logos fork.
+# - Desktop without static-rapidsnark: the shared library, from iden3, so SHARED_LIB is set.
 LIPO_ARCH=
 SHARED_LIB=
+# Who publishes the static libraries: iden3, or the Logos fork.
+STATIC_SOURCE=iden3
 case "$TARGET" in
     aarch64-apple-ios)
         SLUG=iOS
@@ -51,11 +63,13 @@ case "$TARGET" in
         SLUG=macOS-arm64
         LIPO_ARCH=arm64
         SHARED_LIB=librapidsnark.dylib
+        STATIC_SOURCE=logos
         ;;
     x86_64-apple-darwin)
         SLUG=macOS-x86_64
         LIPO_ARCH=x86_64
         SHARED_LIB=librapidsnark.dylib
+        STATIC_SOURCE=logos
         ;;
     aarch64-linux-android) SLUG=android-arm64 ;;
     x86_64-linux-android) SLUG=android-x86_64 ;;
@@ -64,10 +78,12 @@ case "$TARGET" in
             aarch64 | arm64)
                 SLUG=linux-arm64
                 SHARED_LIB=librapidsnark.so
+                STATIC_SOURCE=logos
                 ;;
             x86_64 | amd64)
                 SLUG=linux-x86_64
                 SHARED_LIB=librapidsnark.so
+                STATIC_SOURCE=logos
                 ;;
             *)
                 echo "No rapidsnark prebuilt covers target $TARGET (architecture $ARCH)."
@@ -79,10 +95,26 @@ case "$TARGET" in
         ;;
 esac
 
-ASSET=rapidsnark-$SLUG-$RAPIDSNARK_VERSION.zip
+if [ "$RAPIDSNARK_STATIC" = 1 ]; then
+    SOURCE=$STATIC_SOURCE
+    SHARED_LIB=
+else
+    SOURCE=iden3
+fi
 
-# Regenerate with:
+if [ "$SOURCE" = logos ]; then
+    ASSET=rapidsnark-$SLUG-$LOGOS_RAPIDSNARK_VERSION.tar.gz
+    ASSET_BASE_URL=$LOGOS_BASE_URL
+else
+    ASSET=rapidsnark-$SLUG-$RAPIDSNARK_VERSION.zip
+    ASSET_BASE_URL=$IDEN3_BASE_URL
+fi
+BASE_URL=${RAPIDSNARK_DOWNLOAD_BASE_URL:-$ASSET_BASE_URL}
+
+# Pinned per version, so update them on every bump. Regenerate with:
 #   gh api repos/iden3/rapidsnark/releases/tags/$RAPIDSNARK_VERSION \
+#     --jq '.assets[] | "\(.name) \(.digest)"'
+#   gh api repos/logos-blockchain/logos-blockchain-rapidsnark/releases/tags/$LOGOS_RAPIDSNARK_VERSION \
 #     --jq '.assets[] | "\(.name) \(.digest)"'
 case "$SLUG" in
     iOS) SHA256=2015bb8825f37356f70aa1a3a7fd66e08bb1205a174d3793bfdf388a9e7e6cfd ;;
@@ -95,18 +127,28 @@ case "$SLUG" in
     linux-x86_64) SHA256=2ec59e3aa5ff498e862d60b3b7abdcd094ea484271750ec1ea14fb7c1305e423 ;;
 esac
 
+# The Logos fork's archives.
+if [ "$SOURCE" = logos ]; then
+    case "$SLUG" in
+        linux-arm64) SHA256=acd2148f2e4490ee3df76232e1cd9170afb62db5fa1f217cea976ecb6c63b117 ;;
+        linux-x86_64) SHA256=1f8bb340b9062f22c79d21dfdf03261b2463c4fd132ab947364b63993d7a67e9 ;;
+        macOS-arm64) SHA256=1528adb72e6c4861d38e4731c8a27cee69cbf33343ac98a485ed3b755248444a ;;
+        macOS-x86_64) SHA256=c541391eb80e42939ca9e4df19dab6237727027515d999876586e646929db877 ;;
+    esac
+fi
+
 verify_checksum() {
-    zip_file="$1"
+    archive="$1"
     expected="$2"
 
     if command -v shasum > /dev/null 2>&1; then
-        actual=$(shasum -a 256 "$zip_file" | cut -d' ' -f1)
+        actual=$(shasum -a 256 "$archive" | cut -d' ' -f1)
     else
-        actual=$(sha256sum "$zip_file" | cut -d' ' -f1)
+        actual=$(sha256sum "$archive" | cut -d' ' -f1)
     fi
 
     if [ "$actual" != "$expected" ]; then
-        echo "Checksum mismatch for $zip_file"
+        echo "Checksum mismatch for $archive"
         echo "  expected $expected"
         echo "  actual   $actual"
         return 1
@@ -147,8 +189,12 @@ report_missing_arch() {
     echo "Set RAPIDSNARK_LIB_DIR to a directory holding $1 builds of $REQUIRED_LIBS to build this target."
 }
 
-# Every library, so an interrupted build cannot look finished.
+# Every library, so an interrupted build cannot look finished, and from the same
+# asset, since static and shared builds use different archives.
 unpacked=yes
+if [ "$(cat "$LIB_DIR/.asset" 2> /dev/null)" != "$ASSET" ]; then
+    unpacked=no
+fi
 for lib in $REQUIRED_LIBS $SHARED_LIB; do
     if [ ! -f "$LIB_DIR/$lib" ]; then
         unpacked=no
@@ -161,23 +207,26 @@ fi
 rm -rf "$LIB_DIR"
 
 mkdir -p "$LIB_DIR"
-ZIP_FILE=$BUILD_DIR/$ASSET
+ARCHIVE=$BUILD_DIR/$ASSET
 
 echo "Downloading $ASSET from $BASE_URL"
-if ! curl -fSL -o "$ZIP_FILE" "$BASE_URL/$ASSET"; then
+if ! curl -fSL -o "$ARCHIVE" "$BASE_URL/$ASSET"; then
     echo "Failed to download $BASE_URL/$ASSET"
     echo "Set RAPIDSNARK_DOWNLOAD_BASE_URL to use a mirror, or RAPIDSNARK_LIB_DIR to build against local libraries."
     exit 1
 fi
 
-verify_checksum "$ZIP_FILE" "$SHA256"
+verify_checksum "$ARCHIVE" "$SHA256"
 
 EXTRACT_DIR=$BUILD_DIR/extract-$SLUG
 rm -rf "$EXTRACT_DIR"
 mkdir -p "$EXTRACT_DIR"
 
-echo "Unzipping $ASSET"
-unzip -q "$ZIP_FILE" -d "$EXTRACT_DIR"
+echo "Extracting $ASSET"
+case "$ASSET" in
+    *.tar.gz) tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR" ;;
+    *) unzip -q "$ARCHIVE" -d "$EXTRACT_DIR" ;;
+esac
 
 # The iOS assets keep these at the top level, other platforms nest them in lib/.
 for lib in $REQUIRED_LIBS $SHARED_LIB; do
@@ -195,6 +244,7 @@ for lib in $REQUIRED_LIBS $SHARED_LIB; do
     fi
 done
 
-rm -rf "$EXTRACT_DIR" "$ZIP_FILE"
+rm -rf "$EXTRACT_DIR" "$ARCHIVE"
+echo "$ASSET" > "$LIB_DIR/.asset"
 
 echo "rapidsnark libraries for $TARGET ready in $LIB_DIR"
