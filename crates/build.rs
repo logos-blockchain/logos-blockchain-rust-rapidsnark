@@ -54,8 +54,6 @@ fn main() {
     }
 
     if is_windows_target() {
-        // librapidsnark.a needs mcfgthread, which most MinGW toolchains lack, so link the bundled one.
-        println!("cargo:rustc-link-lib=static=mcfgthread");
         // Link the C++ runtime statically, so binaries don't need libstdc++-6.dll.
         println!("cargo:rustc-link-lib=static:-bundle={cpp_stdlib}");
         return;

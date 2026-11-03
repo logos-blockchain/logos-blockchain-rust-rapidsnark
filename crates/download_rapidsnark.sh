@@ -79,8 +79,6 @@ case "$TARGET" in
     x86_64-pc-windows-gnu)
         SLUG=windows-x86_64
         STATIC_SOURCE=logos
-        # librapidsnark.a is built with mcfgthread, which most MinGW toolchains don't have.
-        REQUIRED_LIBS="$REQUIRED_LIBS libmcfgthread.a"
         ;;
     *-windows-*)
         echo "No rapidsnark prebuilt covers target $TARGET. On Windows, only x86_64-pc-windows-gnu is supported."

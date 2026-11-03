@@ -107,7 +107,7 @@ jobs:
             - name: Build tests
               run: |
                   nix develop .#windows-cross -c cargo test --no-run --target x86_64-pc-windows-gnu \
-                      --features rust-rapidsnark/static-rapidsnark --message-format=json > build.json
+                      --features rust-rapidsnark/static-rapidsnark --message-format=json-render-diagnostics > build.json
             # The test binaries run on Windows, so copy them out for upload, by crate,
             # because each one must run from its crate's directory to find its test vectors.
             - name: Stage test binaries
