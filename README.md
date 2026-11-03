@@ -1,6 +1,17 @@
-# Rust Rapidsnark
+> [!NOTE]
+> This is the [Logos Blockchain](https://github.com/logos-blockchain) fork of
+> [zkmopro/rust-rapidsnark](https://github.com/zkmopro/rust-rapidsnark), used for Groth16 proving in the
+> [Logos Blockchain node](https://github.com/logos-blockchain/logos-blockchain).
+>
+> This fork is not published to crates.io. Depend on it as a git dependency pinned by tag:
+>
+> ```toml
+> rust-rapidsnark = { git = "https://github.com/logos-blockchain/logos-blockchain-rust-rapidsnark.git", tag = "v0.1.4-logos.1" }
+> ```
+>
+> See [CONTRIBUTING.md](./CONTRIBUTING.md) for how this fork is maintained.
 
-[![Crates.io](https://img.shields.io/crates/v/rust-rapidsnark?label=rust-rapidsnark)](https://crates.io/crates/rust-rapidsnark)
+# Rust Rapidsnark
 
 This project provides a Rust adapter for compiling and linking [Rapidsnark](https://github.com/iden3/rapidsnark) into a native library for target platforms (e.g., mobile devices). It includes macros and functions to facilitate the integration of proof generation into Rust codebases.
 
