@@ -2,6 +2,11 @@
 > This is the [Logos Blockchain](https://github.com/logos-blockchain) fork of
 > [zkmopro/rust-rapidsnark](https://github.com/zkmopro/rust-rapidsnark), used for Groth16 proving in the
 > [Logos Blockchain node](https://github.com/logos-blockchain/logos-blockchain).
+> On top of upstream it adds:
+>
+> -   **Dynamic or static linking.** By default, only the shared rapidsnark library is linked.
+>     It contains its own `Fr_*`, `Fq_*` and GMP symbols, so they can't collide with other native ZK libraries.
+>     The `static-rapidsnark` feature links the static libraries instead. iOS and Android are always static.
 >
 > This fork is not published to crates.io. Depend on it as a git dependency pinned by tag:
 >

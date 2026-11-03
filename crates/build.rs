@@ -32,26 +32,40 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", lib_path.display());
 
-    println!("cargo:rustc-link-lib=static=rapidsnark");
-    println!("cargo:rustc-link-lib={cpp_stdlib}");
-    if target.contains("android") {
-        // pthread is included in libc in android
-        println!("cargo:rustc-link-lib=c");
+    // The shared rapidsnark artifact is already linked with its fr/fq/gmp implementation.
+    // Linking those helper libraries again is redundant and can accidentally pull static archives
+    // into downstream binaries, exporting generic Fr_* / Fq_* symbols that collide with other
+    // native ZK libraries.
+    //
+    // The static rapidsnark archive is different: it leaves Fr_*, Fq_*, and GMP symbols unresolved,
+    // so static/mobile builds must link the helper archives.
+    if is_static_rapidsnark() || is_mobile_target() {
+        println!("cargo:rustc-link-lib=static=rapidsnark");
+        println!("cargo:rustc-link-lib=static=fr");
+        println!("cargo:rustc-link-lib=static=fq");
+        println!("cargo:rustc-link-lib=static=gmp");
     } else {
-        println!("cargo:rustc-link-lib=pthread");
-    }
-    println!("cargo:rustc-link-lib=static=fr");
-    println!("cargo:rustc-link-lib=static=fq");
-    println!("cargo:rustc-link-lib=static=gmp");
-
-    if !(env::var("CARGO_CFG_TARGET_OS").unwrap().contains("ios")
-        || env::var("CARGO_CFG_TARGET_OS").unwrap().contains("android"))
-    {
         println!("cargo:rustc-link-lib=dylib=rapidsnark");
-        println!("cargo:rustc-link-lib=dylib=fr");
-        println!("cargo:rustc-link-lib=dylib=fq");
-        println!("cargo:rustc-link-lib=dylib=gmp");
     }
+
+    println!("cargo:rustc-link-lib={cpp_stdlib}");
+
+    // Android bundles pthread into libc
+    let thread_lib = if target.contains("android") {
+        "c"
+    } else {
+        "pthread"
+    };
+    println!("cargo:rustc-link-lib={thread_lib}");
+}
+
+fn is_static_rapidsnark() -> bool {
+    env::var_os("CARGO_FEATURE_STATIC_RAPIDSNARK").is_some()
+}
+
+fn is_mobile_target() -> bool {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    target_os.contains("ios") || target_os.contains("android")
 }
 
 fn download_prebuilt(out_dir: &str, target: &str) -> PathBuf {

@@ -80,6 +80,8 @@ jobs:
                   override: true
             - name: Run tests
               run: cargo test
+            - name: Run tests (static rapidsnark)
+              run: cargo test --features rust-rapidsnark/static-rapidsnark
     test-macOS:
         runs-on: macos-latest
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
@@ -92,6 +94,8 @@ jobs:
                   override: true
             - name: Run tests
               run: cargo test
+            - name: Run tests (static rapidsnark)
+              run: cargo test --features rust-rapidsnark/static-rapidsnark
     test-macOS-x86_64:
         runs-on: macos-15-intel
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
@@ -104,3 +108,5 @@ jobs:
                   override: true
             - name: Run tests
               run: cargo test
+            - name: Run tests (static rapidsnark)
+              run: cargo test --features rust-rapidsnark/static-rapidsnark
