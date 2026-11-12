@@ -4,20 +4,20 @@ on:
     release:
         types: [created]
 
+permissions:
+    contents: read
+
 jobs:
     publish:
+        # Disabled: rust-rapidsnark on crates.io belongs to upstream, so this fork can't publish it.
+        if: false
         runs-on: ubuntu-latest
 
         steps:
             - name: Checkout repo
-              uses: actions/checkout@v5
-
-            - name: Install Rust toolchain
-              uses: actions-rs/toolchain@v1
+              uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
               with:
-                  toolchain: "1.89.0"
-                  components: rustfmt
-                  override: true
+                  persist-credentials: false
 
             - name: Extract release version
               id: version
