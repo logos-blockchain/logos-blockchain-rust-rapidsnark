@@ -11,6 +11,9 @@ on:
             - reopened
             - ready_for_review
 
+permissions:
+    contents: read
+
 env:
     CARGO_TERM_COLOR: always
 
@@ -20,13 +23,17 @@ jobs:
         env:
             RUSTFLAGS: "-Dwarnings" # Make sure CI fails on all warnings, including Clippy lints
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - name: Run Clippy
               run: cargo clippy --all-targets --all-features
     lint:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
 
             - name: Check formatting
               run: cargo fmt --all -- --check
@@ -41,7 +48,9 @@ jobs:
                     - aarch64-apple-ios-sim
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@v5
+              uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - name: Install Rust target
               run: rustup target add ${{ matrix.target }}
             - name: Build
@@ -57,7 +66,9 @@ jobs:
                     - aarch64-linux-android
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@v5
+              uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - name: Install Rust target
               run: rustup target add ${{ matrix.target }}
             - name: Install Android NDK
@@ -67,7 +78,9 @@ jobs:
     test-linux:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)
@@ -75,7 +88,9 @@ jobs:
     test-linux-arm64:
         runs-on: ubuntu-24.04-arm
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)
@@ -83,7 +98,9 @@ jobs:
     test-macOS:
         runs-on: macos-latest
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)
@@ -91,7 +108,9 @@ jobs:
     test-macOS-x86_64:
         runs-on: macos-15-intel
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - name: Run tests
               run: cargo test
             - name: Run tests (static rapidsnark)
@@ -100,7 +119,9 @@ jobs:
     build-windows:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
             - name: Install Rust target
               run: rustup target add x86_64-pc-windows-gnu
@@ -129,7 +150,9 @@ jobs:
             run:
                 shell: bash
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+              with:
+                  persist-credentials: false
             - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
               with:
                   name: windows-tests
